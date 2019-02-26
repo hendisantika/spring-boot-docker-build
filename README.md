@@ -146,3 +146,61 @@ The above command will build your application with Maven and start it without an
 Now you can visit the URL to get response from [my GitHub example:](https://github.com/hendisantika/spring-boot-docker-build.git)
 
 http://localhost:8081/customer/10
+
+### How to Debug?
+
+My example uses Java 11, so there are some JVM options to enable debug mode:
+```
+docker build -t <image_tag> . && docker run -p 8080:8080 -p 5005:5005 --env JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 <image_tag>
+```
+You need to add the Docker environment variable, JAVA_OPTS, with JVM options and map the internal debugging port to the outside of the container: -p 5005:5005.
+
+For Java 5-8 containers, use this JAVA_OPTS parameter:
+```
+JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
+```
+
+### How to Setup Logging
+
+The runtime container contains a folder called app/app/log with all the log files. This path could be easily mounted into your host:
+```
+docker build -t <image_tag> . && docker run -p 8080:8080 -v /opt/spring-boot/test/log:/app/log <image_tag>
+```
+### How to Change the Application Configuration
+
+The jar file contains the default configuration. To selectively override those values, you have [many options.](https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-external-config.html) I will show you some of them.
+
+Please note that all of the configurations are possible when using the exec form of the ENTRYPOINT. When using the shell form of the ENTRYPOINT, you need to pass all command line arguments manually:
+```
+ENTRYPOINT exec java $JAVA_OPTS -jar app.jar $0 $@
+```
+
+### Command Line Arguments
+
+Spring Boot automatically accepts all command line arguments and these arguments are passed into the run command inside Docker:
+```
+docker build -t <image_tag> . && docker run -p 8080:8080 <image_tag> --logging.level.org.springframework=debug
+```
+### System Properties
+
+A similar way is using regular system properties:
+```
+docker build -t <image_tag> . && docker run -p 8080:8080 --env JAVA_OPTS=-Dlogging.level.org.springframework=DEBUG <image_tag>
+```
+
+### Environment Variables
+
+You may use environment variables instead of system properties. Most operating systems do not allow for period-separated key names, but you can use underscores instead (for example,  SPRING_CONFIG_NAME  instead of  spring.config.name ). Check the documentation page for more information.
+```
+docker build -t <image_tag> . && docker run -p 8080:8080 --env LOGGING_LEVEL_ORG_SPRINGFRAMEWORK=DEBUG <image_tag>
+```
+
+### Mount Your Own Configuration File
+You may have noticed that there is a VOLUME command for mounting a configuration folder:
+```
+docker build -t <image_tag> . && docker run -p 8080:8080 -v /opt/spring-boot/test/config:/app/config:ro <image_tag>
+```
+So your local folder `/opt/spring-boot/test/config` should contain the file `application.properties`. This is the default configuration file name and can be easily changed by setting the property `spring.config.name.`
+
+That's all for this post, but your requirements may vary in many ways. I tried to solve some of the most important conditions Java developers using Docker. 
+
