@@ -66,3 +66,83 @@ The second option, how to download required dependencies, comes from the [offici
 
 `RUN mvn -B -e -C -T 1C org.apache.maven.plugins:maven-dependency-plugin:3.0.2:go-offline`
 
+#### How to Customize Maven Settings
+
+There are many situations where you need to change a default Maven setting for your customized build. To do that, you need to copy your settings.xml file into the image before you provide the builder image definition, For example:
+```
+FROM maven:3-jdk-11 as builder
+
+#Copy Custom Maven settings
+
+COPY settings.xml /root/.m2/
+```
+
+#### The Runtime Part of the Dockerfile
+```
+FROM openjdk:11-slim as runtime
+
+EXPOSE 8080
+
+#Set app home folder
+
+ENV APP_HOME /app
+
+#Possibility to set JVM options (https://www.oracle.com/technetwork/java/javase/tech/vmoptions-jsp-140102.html)
+
+ENV JAVA_OPTS=""
+
+#Create base app folder
+
+RUN mkdir $APP_HOME
+
+#Create folder to save configuration files
+
+RUN mkdir $APP_HOME/config
+
+#Create folder with application logs
+
+RUN mkdir $APP_HOME/log
+
+VOLUME $APP_HOME/log
+
+VOLUME $APP_HOME/config
+
+WORKDIR $APP_HOME
+
+#Copy executable jar file from the builder image
+
+COPY --from=builder /build/target/*.jar app.jar
+
+ENTRYPOINT [ "sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar app.jar" ]
+
+#Second option using shell form:
+
+#ENTRYPOINT exec java $JAVA_OPTS -jar app.jar $0 $@
+```
+
+The runtime part starts with some necessary steps, i.e. exposing ports, setting up environments, and creating some useful folders. The most interesting part is related to copying a previously created jar file into our new image:
+```
+#Copy executable jar file from the builder image
+
+COPY --from=builder /build/target/*.jar app.jar
+```
+
+I am copying from the builder image, see the param –from. For more information about copying files from other images, see the [Docker documentation page.](https://docs.docker.com/engine/reference/commandline/cp/)     
+
+As for the Spring Boot application, the created jar file is executable, so it is possible to run our application with the single command:
+
+`ENTRYPOINT [ "sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar app.jar" ]`
+
+To reduce [Tomcat startup time](https://wiki.apache.org/tomcat/HowTo/FasterStartUp#Entropy_Source) there is a system property pointing to /dev/urandom.
+
+There are other options for runing a Spring Boot application inside Docker. For more info, visit [the official Spring guide.](https://spring.io/guides/gs/spring-boot-docker/)
+
+### How to Build and Run Spring Boot Application in Docker in One Step
+```
+docker build -t <image_tag> . && docker run -p 8080:8080 <image_tag>
+```
+The above command will build your application with Maven and start it without any delay. This is the simplest way without any customizations. The file may come with some specific requirements, so here’s a couple of them.
+
+Now you can visit the URL to get response from [my GitHub example:](https://github.com/hendisantika/spring-boot-docker-build.git)
+
+http://localhost:8081/customer/10
