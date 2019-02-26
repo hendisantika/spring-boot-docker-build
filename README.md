@@ -16,3 +16,53 @@ My goals:
 * The application inside Docker should remain configurable as much as possible (with all Spring Boot configuration options).
 * Possibility to enable debugging (on demand).
 * Possibility to see log files.
+
+The final image is designed for development purposes, but it does not contain any no-go production parts and it is fully configurable.
+
+To fulfill a single portable Dockerfile requirement, I need to use Docker [multi-stage builds.](https://docs.docker.com/develop/develop-images/multistage-build/)
+
+It will have two main parts (stages):
+
+* The building part.
+* The runtime part.
+
+#### The Building Part of the Dockerfile
+
+```
+### BUILD image
+
+FROM maven:3-jdk-11 as builder
+
+# create app folder for sources
+
+RUN mkdir -p /build
+
+WORKDIR /build
+
+COPY pom.xml /build
+
+#Download all required dependencies into one layer
+
+RUN mvn -B dependency:resolve dependency:resolve-plugins
+
+#Copy source code
+
+COPY src /build/src
+
+# Build application
+
+RUN mvn package
+```
+
+I have started from the [official Maven image](https://hub.docker.com/_/maven/), so you may change this as you wish. The most interesting part is this:
+
+`RUN mvn -B dependency:resolve dependency:resolve-plugins`
+
+It downloads all dependencies required either by your application or by plugins called during a build process. Then all dependencies are a part of one layer. That layer does not change until any changes are found in the pom.xml file. 
+
+So the rebuilding is very fast and does not include downloading all the dependencies again and again.
+
+The second option, how to download required dependencies, comes from the [official Docker Maven site](https://github.com/carlossg/docker-maven) (when you have some problems with the previous variant):
+
+`RUN mvn -B -e -C -T 1C org.apache.maven.plugins:maven-dependency-plugin:3.0.2:go-offline`
+
